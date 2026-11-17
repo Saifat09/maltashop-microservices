@@ -1,0 +1,74 @@
+# Target production shape for the Order service on managed Kubernetes.
+# Not applied by the prototype pipeline (no cluster attached); kept here so the
+# report's reliability design is concrete and reviewable.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: production
+  labels: {app: order-service, team: checkout}
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {app: order-service}
+  template:
+    metadata:
+      labels: {app: order-service, team: checkout}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: {matchLabels: {app: order-service}}
+      containers:
+        - name: order
+          image: ghcr.io/maltashop/maltashop-order-service@sha256:REPLACED_BY_PIPELINE
+          ports: [{containerPort: 8001}]
+          envFrom:
+            - configMapRef: {name: order-service-config}
+            - secretRef: {name: order-service-secrets}     # DATABASE_URL, RABBITMQ_URL
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          readinessProbe:
+            httpGet: {path: /health/ready, port: 8001}
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: 8001}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            preStop: {exec: {command: ["sleep", "5"]}}   # let the load balancer drain
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: order-service
+  namespace: production
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: order-service}
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 60}}
+  behavior:
+    scaleUp: {stabilizationWindowSeconds: 0, policies: [{type: Percent, value: 100, periodSeconds: 30}]}
+    scaleDown: {stabilizationWindowSeconds: 300}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: order-service
+  namespace: production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: {app: order-service}
