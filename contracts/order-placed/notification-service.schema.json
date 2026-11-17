@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OrderPlaced v1 - as required by notification-service",
+  "type": "object",
+  "required": ["event_id", "event_type", "payload"],
+  "properties": {
+    "event_type": {"const": "OrderPlaced"},
+    "payload": {
+      "type": "object",
+      "required": ["order_id", "customer_email", "total_cents"],
+      "properties": {
+        "order_id": {"type": "string"},
+        "customer_email": {"type": "string", "format": "email"},
+        "total_cents": {"type": "integer"}
+      }
+    }
+  },
+  "examples": [{
+    "event_id": "6f1c1f9e-0000-4000-8000-000000000003",
+    "event_type": "OrderPlaced",
+    "version": 1,
+    "correlation_id": "contract-example",
+    "payload": {"order_id": "ord-contract-3", "customer_email": "joe.camilleri@example.com.mt", "total_cents": 4998}
+  }]
+}
