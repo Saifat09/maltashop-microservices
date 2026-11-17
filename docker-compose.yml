@@ -1,0 +1,114 @@
+# MaltaShop "place an order" prototype.
+# Start everything with:   docker compose up --build
+# Each service owns its own PostgreSQL instance (database-per-service);
+# they talk to each other only through RabbitMQ events.
+
+x-service-env: &service-env
+  RABBITMQ_URL: amqp://${RABBITMQ_USER:-maltashop}:${RABBITMQ_PASSWORD:-maltashop-dev}@rabbitmq:5672/
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+x-postgres: &postgres
+  image: postgres:16-alpine
+  command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=30"]
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+  restart: unless-stopped
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-maltashop}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-maltashop-dev}
+    ports:
+      - "15672:15672"   # management UI: http://localhost:15672
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  order-db:
+    <<: *postgres
+    environment: {POSTGRES_DB: orders, POSTGRES_USER: order_svc, POSTGRES_PASSWORD: "${ORDER_DB_PASSWORD:-order-dev}"}
+    volumes: [order-data:/var/lib/postgresql/data]
+
+  inventory-db:
+    <<: *postgres
+    environment: {POSTGRES_DB: inventory, POSTGRES_USER: inventory_svc, POSTGRES_PASSWORD: "${INVENTORY_DB_PASSWORD:-inventory-dev}"}
+    volumes: [inventory-data:/var/lib/postgresql/data]
+
+  payment-db:
+    <<: *postgres
+    environment: {POSTGRES_DB: payments, POSTGRES_USER: payment_svc, POSTGRES_PASSWORD: "${PAYMENT_DB_PASSWORD:-payment-dev}"}
+    volumes: [payment-data:/var/lib/postgresql/data]
+
+  notification-db:
+    <<: *postgres
+    environment: {POSTGRES_DB: notifications, POSTGRES_USER: notification_svc, POSTGRES_PASSWORD: "${NOTIFICATION_DB_PASSWORD:-notification-dev}"}
+    volumes: [notification-data:/var/lib/postgresql/data]
+
+  order-service:
+    build: {context: ., dockerfile: services/order/Dockerfile}
+    image: maltashop/order-service:${IMAGE_TAG:-local}
+    environment:
+      <<: *service-env
+      SERVICE_NAME: order-service
+      DATABASE_URL: postgresql+asyncpg://order_svc:${ORDER_DB_PASSWORD:-order-dev}@order-db:5432/orders
+      OUTBOX_POLL_INTERVAL: ${OUTBOX_POLL_INTERVAL:-0.5}
+    ports: ["8001:8001"]
+    depends_on:
+      order-db: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    restart: unless-stopped
+
+  inventory-service:
+    build: {context: ., dockerfile: services/inventory/Dockerfile}
+    image: maltashop/inventory-service:${IMAGE_TAG:-local}
+    environment:
+      <<: *service-env
+      SERVICE_NAME: inventory-service
+      DATABASE_URL: postgresql+asyncpg://inventory_svc:${INVENTORY_DB_PASSWORD:-inventory-dev}@inventory-db:5432/inventory
+      SEED_STOCK: ${SEED_STOCK:-TV-55-OLED=5,KETTLE-1L=50,AIRFRYER-XL=0,SOFA-3S=2}
+    ports: ["8002:8002"]
+    depends_on:
+      inventory-db: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    restart: unless-stopped
+
+  payment-service:
+    build: {context: ., dockerfile: services/payment/Dockerfile}
+    image: maltashop/payment-service:${IMAGE_TAG:-local}
+    environment:
+      <<: *service-env
+      SERVICE_NAME: payment-service
+      DATABASE_URL: postgresql+asyncpg://payment_svc:${PAYMENT_DB_PASSWORD:-payment-dev}@payment-db:5432/payments
+      PROVIDER_TIMEOUT_SECONDS: ${PROVIDER_TIMEOUT_SECONDS:-3}
+    ports: ["8003:8003"]
+    depends_on:
+      payment-db: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    restart: unless-stopped
+
+  notification-service:
+    build: {context: ., dockerfile: services/notification/Dockerfile}
+    image: maltashop/notification-service:${IMAGE_TAG:-local}
+    environment:
+      <<: *service-env
+      SERVICE_NAME: notification-service
+      DATABASE_URL: postgresql+asyncpg://notification_svc:${NOTIFICATION_DB_PASSWORD:-notification-dev}@notification-db:5432/notifications
+    ports: ["8004:8004"]
+    depends_on:
+      notification-db: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    restart: unless-stopped
+
+volumes:
+  order-data:
+  inventory-data:
+  payment-data:
+  notification-data:
