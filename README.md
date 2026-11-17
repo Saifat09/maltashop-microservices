@@ -51,7 +51,7 @@ curl "http://localhost:8004/notifications?order_id=<order_id>"
 curl http://localhost:8002/stock/KETTLE-1L
 
 # follow one request through every service
-docker compose logs -f | grep demo-001
+docker compose logs --no-log-prefix | python scripts/trace.py demo-001
 
 # full end-to-end check (happy path, declined card, out of stock)
 python scripts/smoke_test.py
