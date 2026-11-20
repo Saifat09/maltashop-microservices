@@ -1,0 +1,53 @@
+# Commit-stage pipeline for the services that consume OrderPlaced.
+# Each one verifies the consumer side of its contract: the example message in
+# its own schema under /contracts must be processable by its handler.
+name: consumer-services
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/inventory/**"
+      - "services/payment/**"
+      - "services/notification/**"
+      - "libs/chassis/**"
+      - "contracts/**"
+      - ".github/workflows/consumer-services.yml"
+  pull_request:
+    paths:
+      - "services/inventory/**"
+      - "services/payment/**"
+      - "services/notification/**"
+      - "libs/chassis/**"
+      - "contracts/**"
+      - ".github/workflows/consumer-services.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.service }} - lint, tests, consumer contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [inventory, payment, notification]
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/${{ matrix.service }}/requirements*.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt ../../libs/chassis
+      - name: Lint
+        run: ruff check .
+      - name: Tests (including consumer side of the OrderPlaced contract)
+        run: pytest -v
