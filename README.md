@@ -55,6 +55,9 @@ docker compose logs --no-log-prefix | python scripts/trace.py demo-001
 
 # full end-to-end check (happy path, declined card, out of stock)
 python scripts/smoke_test.py
+
+# one order, end to end: request, response, notifications and correlated logs
+bash scripts/demo.sh demo-001
 ```
 
 Try `"payment_token":"tok_decline"` to see the compensating action release stock, or

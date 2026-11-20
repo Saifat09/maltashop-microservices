@@ -111,9 +111,8 @@ jobs:
         run: docker compose up -d --no-build --wait --wait-timeout 180
       - name: Smoke test - confirm, decline (compensation) and out-of-stock paths
         run: python3 scripts/smoke_test.py
-      - name: Show correlated logs for one order
-        if: always()
-        run: docker compose logs --no-color order-service inventory-service payment-service notification-service | grep -m 40 smoke- || true
+      - name: Trace one order through all services (correlation ID)
+        run: bash scripts/demo.sh "ci-${GITHUB_RUN_NUMBER}"
       - name: Dump all logs on failure
         if: failure()
         run: docker compose logs --no-color
