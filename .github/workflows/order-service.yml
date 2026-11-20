@@ -65,7 +65,7 @@ jobs:
         run: pytest tests/contract -v --junitxml=reports/contract.xml
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: order-test-reports
           path: services/order/reports/
@@ -85,7 +85,7 @@ jobs:
             image --exit-code 1 --severity CRITICAL --ignore-unfixed --no-progress "$LOCAL_IMAGE:${GITHUB_SHA}"
       - name: Save image as pipeline artifact
         run: docker save "$LOCAL_IMAGE:${GITHUB_SHA}" | gzip > order-image.tar.gz
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: order-image
           path: order-image.tar.gz
@@ -100,7 +100,7 @@ jobs:
       IMAGE_TAG: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           name: order-image
       - name: Load the image built in the previous stage
@@ -133,7 +133,7 @@ jobs:
     outputs:
       image: ${{ steps.push.outputs.image }}
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           name: order-image
       - run: gunzip -c order-image.tar.gz | docker load
