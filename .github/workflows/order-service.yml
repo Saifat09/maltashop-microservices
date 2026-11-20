@@ -16,7 +16,7 @@ on:
       - "libs/chassis/**"
       - "contracts/**"
       - "docker-compose.yml"
-      - "scripts/smoke_test.py"
+      - "scripts/**"
       - ".github/workflows/order-service.yml"
   pull_request:
     paths:
@@ -24,7 +24,7 @@ on:
       - "libs/chassis/**"
       - "contracts/**"
       - "docker-compose.yml"
-      - "scripts/smoke_test.py"
+      - "scripts/**"
       - ".github/workflows/order-service.yml"
   workflow_dispatch:
 
@@ -58,11 +58,11 @@ jobs:
       - name: Lint
         run: ruff check .
       - name: Unit tests
-        run: pytest tests/unit -q --junitxml=reports/unit.xml
+        run: pytest tests/unit -v --junitxml=reports/unit.xml
       - name: Component tests
-        run: pytest tests/component -q --junitxml=reports/component.xml
+        run: pytest tests/component -v --junitxml=reports/component.xml
       - name: Contract tests (OrderPlaced vs consumer schemas)
-        run: pytest tests/contract -q --junitxml=reports/contract.xml
+        run: pytest tests/contract -v --junitxml=reports/contract.xml
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -113,6 +113,8 @@ jobs:
         run: python3 scripts/smoke_test.py
       - name: Trace one order through all services (correlation ID)
         run: bash scripts/demo.sh "ci-${GITHUB_RUN_NUMBER}"
+      - name: Fault isolation - checkout keeps working while Notification is down
+        run: bash scripts/isolation_test.sh "${GITHUB_RUN_NUMBER}"
       - name: Dump all logs on failure
         if: failure()
         run: docker compose logs --no-color
